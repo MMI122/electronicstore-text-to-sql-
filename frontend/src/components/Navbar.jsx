@@ -7,13 +7,15 @@ import {
   ChartBarIcon, 
   ShoppingCartIcon,
   UserIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  ShieldCheckIcon,
+  LockClosedIcon
 } from '@heroicons/react/24/outline'
 import axios from 'axios'
 
 const API_BASE_URL = 'http://localhost:5000/api'
 
-const Navbar = ({ customer, onLogout, onShowCart }) => {
+const Navbar = ({ customer, onLogout, onShowCart, onShowAdminAuth, isAdminAuthenticated, onAdminLogout }) => {
   const location = useLocation()
 
   // Fetch cart count
@@ -30,6 +32,9 @@ const Navbar = ({ customer, onLogout, onShowCart }) => {
 
   const navigation = [
     { name: 'Home', href: '/', icon: HomeIcon },
+  ]
+
+  const adminNavigation = [
     { name: 'Admin Panel', href: '/admin', icon: CogIcon },
   ]
 
@@ -49,6 +54,7 @@ const Navbar = ({ customer, onLogout, onShowCart }) => {
           </div>
           
           <div className="flex items-center space-x-4">
+            {/* Regular Navigation */}
             {navigation.map((item) => {
               const isActive = location.pathname === item.href
               return (
@@ -66,6 +72,47 @@ const Navbar = ({ customer, onLogout, onShowCart }) => {
                 </Link>
               )
             })}
+
+            {/* Admin Navigation */}
+            {isAdminAuthenticated && adminNavigation.map((item) => {
+              const isActive = location.pathname === item.href
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={`inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md transition-colors duration-200 ${
+                    isActive
+                      ? 'text-red-700 bg-red-100'
+                      : 'text-red-600 hover:text-red-700 hover:bg-red-50'
+                  }`}
+                >
+                  <item.icon className="h-4 w-4 mr-1.5" />
+                  {item.name}
+                </Link>
+              )
+            })}
+
+            {/* Admin Login Button */}
+            {!isAdminAuthenticated && (
+              <button
+                onClick={onShowAdminAuth}
+                className="inline-flex items-center px-3 py-2 border border-red-300 text-sm leading-4 font-medium rounded-md text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors duration-200"
+              >
+                <LockClosedIcon className="h-4 w-4 mr-1.5" />
+                Admin Login
+              </button>
+            )}
+
+            {/* Admin Logout Button */}
+            {isAdminAuthenticated && (
+              <button
+                onClick={onAdminLogout}
+                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors duration-200"
+              >
+                <ShieldCheckIcon className="h-4 w-4 mr-1.5" />
+                Admin Logout
+              </button>
+            )}
 
             {/* Shopping Cart */}
             {customer && (
