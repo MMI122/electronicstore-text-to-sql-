@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import ProductList from '../components/ProductList'
 import NaturalQuery from '../components/NaturalQuery'
+import MetricsCards from '../components/MetricsCards'
 import { 
   ShoppingBagIcon, 
   ChartBarIcon, 
@@ -42,24 +43,28 @@ const Home = ({ customer, onShowCart }) => {
       value: dashboardStats?.products?.inventory_statistics?.total_products || 0,
       icon: ShoppingBagIcon,
       color: 'bg-blue-500',
+      subtitle: 'Available in store'
     },
     {
       title: 'Low Stock Items',
       value: dashboardStats?.products?.inventory_statistics?.low_stock_count || 0,
       icon: ChartBarIcon,
       color: 'bg-yellow-500',
+      subtitle: 'Need restocking'
     },
     {
       title: 'Total Revenue (30d)',
-      value: `$${(dashboardStats?.orders?.sales_trend?.reduce((sum, day) => sum + (day.revenue || 0), 0) || 0).toLocaleString()}`,
+      value: dashboardStats?.orders?.sales_trend?.reduce((sum, day) => sum + (day.revenue || 0), 0) || 0,
       icon: CurrencyDollarIcon,
       color: 'bg-green-500',
+      subtitle: 'Last 30 days'
     },
     {
       title: 'Active Customers',
       value: dashboardStats?.orders?.top_customers?.length || 0,
       icon: UsersIcon,
       color: 'bg-purple-500',
+      subtitle: 'With recent orders'
     },
   ]
 
@@ -75,26 +80,8 @@ const Home = ({ customer, onShowCart }) => {
         </p>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statsCards.map((stat, index) => (
-          <div key={index} className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">
-                  {stat.title}
-                </p>
-                <p className="text-2xl font-bold text-gray-900 mt-2">
-                  {statsLoading ? '...' : stat.value}
-                </p>
-              </div>
-              <div className={`${stat.color} rounded-lg p-3`}>
-                <stat.icon className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Stats Cards - Horizontal Scrollable */}
+      <MetricsCards statsCards={statsCards} isLoading={statsLoading} />
 
       {/* Tab Navigation */}
       <div className="border-b border-gray-200">
