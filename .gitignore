@@ -1,2 +1,19 @@
+# Ignore Python virtual environment and env files
+backend/venv/
+
+# Environment files (secrets)
+*.env
+backend/.env
+backend/*.env
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
 backend/venv/
 
