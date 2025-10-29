@@ -60,6 +60,8 @@ def setup_database():
     password = os.getenv('MYSQL_PASSWORD', '')
     database = os.getenv('MYSQL_DATABASE', 'gadgets_store')
     drop_existing = os.getenv('DROP_EXISTING', 'false').lower() in ('1', 'true', 'yes')
+    # When running in container start, allow forcing the setup even if tables exist.
+    force_setup = os.getenv('FORCE_SETUP', 'false').lower() in ('1', 'true', 'yes')
 
     print("Starting database setup...")
 
@@ -73,9 +75,17 @@ def setup_database():
         cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
         cursor.execute(f"USE `{database}`")
 
-        # Optionally drop existing tables
+        # Check for existing tables. By default, if tables exist we skip importing schema/seed
+        # to avoid accidental destructive changes. Set DROP_EXISTING=true or FORCE_SETUP=true
+        # to force re-import (DROP_EXISTING will drop tables first).
         cursor.execute("SHOW TABLES")
         existing_tables = cursor.fetchall()
+        if existing_tables and not drop_existing and not force_setup:
+            print(f"Database '{database}' already contains {len(existing_tables)} table(s); skipping schema and seed import. Set DROP_EXISTING=true or FORCE_SETUP=true to override.")
+            cursor.close()
+            conn.close()
+            return True
+
         if existing_tables and drop_existing:
             print(f"Dropping {len(existing_tables)} existing tables (DROP_EXISTING=true)")
             cursor.execute("SET FOREIGN_KEY_CHECKS = 0")

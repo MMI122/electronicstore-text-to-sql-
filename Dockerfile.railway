@@ -27,7 +27,10 @@ WORKDIR /app/backend
 # Expose the port Railway expects the service to listen on
 EXPOSE 5000
 
-# Use gunicorn with the Flask factory create_app()
-# Railway will set the PORT environment variable. Use shell form so $PORT is expanded at runtime.
+# Copy and enable entrypoint (runs DB setup if needed, then starts gunicorn)
+COPY backend/entrypoint.sh /app/backend/entrypoint.sh
+RUN chmod +x /app/backend/entrypoint.sh
+
+# Railway will set the PORT environment variable. Use the entrypoint so $PORT and DB env vars are available at runtime.
 ENV PORT=5000
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} 'app:create_app()'"]
+CMD ["sh", "-c", "/app/backend/entrypoint.sh"]

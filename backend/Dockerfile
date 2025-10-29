@@ -21,5 +21,9 @@ WORKDIR /app/backend
 ENV PORT=5000
 EXPOSE 5000
 
-# Use shell form so the $PORT environment variable (set by Railway or other hosts) is respected.
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} 'app:create_app()'"]
+# Ensure entrypoint is executable and run it (it will run DB setup then start gunicorn).
+COPY backend/entrypoint.sh /app/backend/entrypoint.sh
+RUN chmod +x /app/backend/entrypoint.sh
+
+# Use entrypoint script so runtime env vars (MYSQL_*, etc.) are available
+CMD ["sh", "-c", "/app/backend/entrypoint.sh"]
