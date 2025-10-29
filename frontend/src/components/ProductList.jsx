@@ -67,11 +67,21 @@ const ProductList = ({ customer, onShowCart }) => {
   const { data: productsData, isLoading, error } = useQuery({
     queryKey: ['products', filters, page],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '12',
-        ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''))
+      // Build params and map camelCase frontend keys to snake_case expected by backend
+      const paramsObj = { page: page.toString(), limit: '12' }
+      Object.entries(filters).forEach(([k, v]) => {
+        if (v === '' || v === null || typeof v === 'undefined') return
+        let key = k
+        // Map frontend keys to backend expected query param names
+        if (k === 'minPrice') key = 'min_price'
+        else if (k === 'maxPrice') key = 'max_price'
+        else if (k === 'sortBy') key = 'sort_by'
+        else if (k === 'sortOrder') key = 'sort_order'
+
+        paramsObj[key] = String(v)
       })
+
+      const params = new URLSearchParams(paramsObj)
       const response = await axios.get(`${API_BASE_URL}/products?${params}`)
       return response.data
     }
