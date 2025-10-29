@@ -1,0 +1,16 @@
+# Railway config-as-code (minimal).
+# This file instructs Railway to use the repo-root Dockerfile named
+# Dockerfile.railway for building the service. Adjust service name or paths
+# if your project layout differs.
+
+[project]
+name = "electronicstore-text-to-sql-"
+
+[[services]]
+name = "backend"
+path = "."
+dockerfile = "Dockerfile.railway"
+start = "sh start.sh"
+
+# Note: You still need to add environment variables (secrets) in the Railway UI
+# (Project -> Variables) for MYSQL_*, HUGGINGFACE_API_TOKEN, SECRET_KEY, etc.
