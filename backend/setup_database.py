@@ -1,154 +1,138 @@
-"""
-Automated database setup script for Gadgets Store
-This will create database, import schema, and seed data
+"""Automated database setup script for Gadgets Store.
+This script is intended to be safe to run non-interactively in CI/container.
+
+Behavior:
+- Creates the database if it does not exist.
+- Imports schema and seed files located in backend/db/
+- If environment variable DROP_EXISTING=true, existing tables will be dropped.
+
+Notes for Railway / container runs:
+- Provide MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE as env vars.
 """
 
-import mysql.connector
 import os
+import re
+import mysql.connector
+from mysql.connector import Error
 from dotenv import load_dotenv
 
 load_dotenv()
 
-def setup_database():
-    print("=" * 60)
-    print("🚀 Gadgets Store Database Setup")
-    print("=" * 60)
-    
-    # Configuration
-    config = {
-        'host': os.getenv('MYSQL_HOST', 'localhost'),
-        'user': os.getenv('MYSQL_USER', 'root'),
-        'password': os.getenv('MYSQL_PASSWORD', ''),
-    }
-    
-    database_name = os.getenv('MYSQL_DATABASE', 'gadgets_store')
-    
+
+def _read_sql_file(path: str) -> str:
+    with open(path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def _normalize_delimiters(sql: str) -> str:
+    """Convert DELIMITER blocks (e.g. DELIMITER // ... END //) into semicolon-terminated statements
+    so mysql.connector can execute them via multi=True.
+    """
+    # Remove lines that declare delimiter
+    sql = re.sub(r"(?m)^DELIMITER\s+\S+\s*$", "", sql)
+
+    # Replace common 'END //' or 'END %%' style endings with 'END;'
+    sql = re.sub(r"END\s+//", "END;", sql)
+    sql = re.sub(r"END\s+%%", "END;", sql)
+
+    # Replace any remaining line that is just '//' with ';'
+    sql = re.sub(r"(?m)^//\s*$", ";", sql)
+
+    # Sometimes delimiters occur at line ends: replace '//' optionally followed by newline
+    sql = re.sub(r"//\s*\n", ";\n", sql)
+
+    return sql
+
+
+def execute_multi_sql(cursor, sql: str):
     try:
-        # Step 1: Connect to MySQL (without database)
-        print("\n📡 Step 1: Connecting to MySQL server...")
-        connection = mysql.connector.connect(**config)
-        cursor = connection.cursor()
-        print("   ✅ Connected successfully")
-        
-        # Step 2: Create database if not exists
-        print(f"\n📦 Step 2: Creating database '{database_name}'...")
-        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {database_name}")
-        cursor.execute(f"USE {database_name}")
-        print(f"   ✅ Database '{database_name}' ready")
-        
-        # Step 3: Check if tables exist
+        for result in cursor.execute(sql, multi=True):
+            # iterate to ensure statements are sent to server
+            pass
+    except Error as e:
+        # Re-raise to allow caller to handle or log
+        raise
+
+
+def setup_database():
+    host = os.getenv('MYSQL_HOST', 'localhost')
+    user = os.getenv('MYSQL_USER', 'root')
+    password = os.getenv('MYSQL_PASSWORD', '')
+    database = os.getenv('MYSQL_DATABASE', 'gadgets_store')
+    drop_existing = os.getenv('DROP_EXISTING', 'false').lower() in ('1', 'true', 'yes')
+
+    print("Starting database setup...")
+
+    try:
+        # Connect without database to create it if necessary
+        conn_params = {'host': host, 'user': user, 'password': password}
+        conn = mysql.connector.connect(**conn_params)
+        cursor = conn.cursor()
+
+        print(f"Ensuring database '{database}' exists...")
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+        cursor.execute(f"USE `{database}`")
+
+        # Optionally drop existing tables
         cursor.execute("SHOW TABLES")
         existing_tables = cursor.fetchall()
-        
-        if existing_tables:
-            print(f"\n⚠️  Warning: Database already has {len(existing_tables)} tables")
-            response = input("   Do you want to drop and recreate all tables? (yes/no): ")
-            if response.lower() == 'yes':
-                print("   🗑️  Dropping existing tables...")
-                cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
-                for table in existing_tables:
-                    cursor.execute(f"DROP TABLE IF EXISTS {table[0]}")
-                cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
-                print("   ✅ Existing tables dropped")
-        
-        # Step 4: Import schema
-        print("\n📄 Step 3: Importing database schema...")
+        if existing_tables and drop_existing:
+            print(f"Dropping {len(existing_tables)} existing tables (DROP_EXISTING=true)")
+            cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+            for t in existing_tables:
+                table_name = t[0]
+                cursor.execute(f"DROP TABLE IF EXISTS `{table_name}`")
+            cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+            conn.commit()
+
+        # Import schema
         schema_file = os.path.join(os.path.dirname(__file__), 'db', 'schema.sql')
-        
         if os.path.exists(schema_file):
-            with open(schema_file, 'r', encoding='utf-8') as f:
-                schema_sql = f.read()
-            
-            # Execute schema (split by delimiter changes)
-            for statement in schema_sql.split('DELIMITER'):
-                if statement.strip():
-                    try:
-                        cursor.execute(statement, multi=True)
-                    except:
-                        # Some statements might fail, continue
-                        pass
-            
-            connection.commit()
-            print("   ✅ Schema imported successfully")
+            print(f"Importing schema from {schema_file} ...")
+            raw_schema = _read_sql_file(schema_file)
+            schema_sql = _normalize_delimiters(raw_schema)
+            execute_multi_sql(cursor, schema_sql)
+            conn.commit()
+            print("Schema imported")
         else:
-            print(f"   ❌ Schema file not found at: {schema_file}")
-            return False
-        
-        # Step 5: Import seed data
-        print("\n🌱 Step 4: Importing seed data...")
+            print(f"Schema file not found at {schema_file}")
+
+        # Import seed data if present
         seed_file = os.path.join(os.path.dirname(__file__), 'db', 'seed.sql')
-        
         if os.path.exists(seed_file):
-            with open(seed_file, 'r', encoding='utf-8') as f:
-                seed_sql = f.read()
-            
-            # Execute seed data
-            for statement in seed_sql.split(';'):
-                if statement.strip():
-                    try:
-                        cursor.execute(statement)
-                    except Exception as e:
-                        print(f"   ⚠️  Warning: {str(e)[:50]}...")
-            
-            connection.commit()
-            print("   ✅ Seed data imported successfully")
+            print(f"Importing seed data from {seed_file} ...")
+            raw_seed = _read_sql_file(seed_file)
+            seed_sql = _normalize_delimiters(raw_seed)
+            execute_multi_sql(cursor, seed_sql)
+            conn.commit()
+            print("Seed data imported")
         else:
-            print(f"   ⚠️  Seed file not found at: {seed_file}")
-            print("   ℹ️  You can add sample data manually later")
-        
-        # Step 6: Verify setup
-        print("\n✅ Step 5: Verifying database setup...")
+            print("No seed file found; skipping seeding")
+
+        # Quick verification
         cursor.execute("SHOW TABLES")
-        tables = cursor.fetchall()
-        
-        print(f"\n📊 Database Statistics:")
-        print(f"   Total tables: {len(tables)}")
-        
-        for table in tables:
-            table_name = table[0]
-            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
-            count = cursor.fetchone()[0]
-            print(f"   ✓ {table_name}: {count} rows")
-        
+        tables = [r[0] for r in cursor.fetchall()]
+        print(f"Database ready. Tables: {len(tables)}")
+
         cursor.close()
-        connection.close()
-        
-        print("\n" + "=" * 60)
-        print("🎉 Database setup completed successfully!")
-        print("=" * 60)
-        print("\n📝 Next steps:")
-        print("   1. Start the backend server: python app.py")
-        print("   2. Start the frontend: cd ../frontend && npm run dev")
-        print("   3. Open browser: http://localhost:3000")
-        
+        conn.close()
         return True
-        
-    except mysql.connector.Error as err:
-        print(f"\n❌ Error: {err}")
-        print("\n🔍 Troubleshooting:")
-        print("   1. Check if MySQL is running in XAMPP")
-        print("   2. Verify credentials in .env file")
-        print("   3. Make sure port 3306 is not blocked")
+
+    except Error as err:
+        print(f"MySQL Error: {err}")
         return False
     except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
+        print(f"Unexpected error: {e}")
         return False
 
-if __name__ == "__main__":
-    # Check if .env file exists
-    if not os.path.exists('.env'):
-        print("\n⚠️  .env file not found!")
-        print("\nCreating .env file with default values...")
-        
-        with open('.env', 'w') as f:
-            f.write("# MySQL Database Configuration\n")
-            f.write("MYSQL_HOST=localhost\n")
-            f.write("MYSQL_USER=root\n")
-            f.write("MYSQL_PASSWORD=\n")
-            f.write("MYSQL_DATABASE=gadgets_store\n")
-        
-        print("✅ .env file created")
-        print("📝 Please edit .env file and set your MySQL password if needed\n")
-        input("Press Enter to continue...")
-    
-    setup_database()
+
+if __name__ == '__main__':
+    # If running interactively and .env missing, show a note but do not auto-create secrets in CI
+    if not os.path.exists(os.path.join(os.path.dirname(__file__), '.env')):
+        print("Note: backend/.env not found. In deployment, provide DB credentials via Railway environment variables.")
+
+    ok = setup_database()
+    if ok:
+        print("Database setup completed successfully")
+    else:
+        print("Database setup failed")

@@ -1,0 +1,32 @@
+### Dockerfile tailored for Railway (backend service)
+# Builds the Flask backend and exposes port 5000
+
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Install small system deps (kept minimal)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy only requirements first for better caching
+COPY backend/requirements.txt /app/backend/requirements.txt
+
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r /app/backend/requirements.txt
+
+# Copy the repository
+COPY . /app
+
+WORKDIR /app/backend
+
+# Expose the port Railway expects the service to listen on
+EXPOSE 5000
+
+# Use gunicorn with the Flask factory create_app()
+# Railway will set PORT environment variable; our app reads PORT or defaults to 5000
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:create_app()"]

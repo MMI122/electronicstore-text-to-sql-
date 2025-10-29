@@ -3,7 +3,9 @@ Flask-CORS==4.0.0
 mysql-connector-python==8.1.0
 python-dotenv==1.0.0
 requests==2.31.0
-transformers==4.35.0
-torch==2.8.0
+# NOTE: heavy ML packages (transformers, torch) intentionally removed for lightweight deployment
+# If you need to run local models on the server, re-add them and deploy to a VM with sufficient resources
 sqlparse==0.4.4
 nltk==3.8.1
+# Production WSGI server
+gunicorn==20.1.0
