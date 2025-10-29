@@ -28,5 +28,6 @@ WORKDIR /app/backend
 EXPOSE 5000
 
 # Use gunicorn with the Flask factory create_app()
-# Railway will set PORT environment variable; our app reads PORT or defaults to 5000
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:create_app()"]
+# Railway will set the PORT environment variable. Use shell form so $PORT is expanded at runtime.
+ENV PORT=5000
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} 'app:create_app()'"]
